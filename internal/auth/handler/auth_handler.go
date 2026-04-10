@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"gin-quickstart/internal/auth/service"
+	"gin-quickstart/internal/config"
 )
 
 // AuthHandler holds the dependencies for auth HTTP handlers.
@@ -23,14 +24,22 @@ func NewAuthHandler(authSvc service.AuthService, tokenSvc service.TokenService) 
 
 // registerRequest is the expected JSON body for POST /api/v1/auth/register.
 type registerRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Name            string `json:"name"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirm_password"`
 }
 
 // loginRequest is the expected JSON body for POST /api/v1/auth/login.
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type adminLoginRequest struct {
+	Email         string `json:"email"`
+	Password      string `json:"password"`
+	AdminPasscode string `json:"admin_passcode"`
 }
 
 // RegisterHandler handles POST /api/v1/auth/register.
@@ -45,8 +54,12 @@ func (h *AuthHandler) RegisterHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields"})
 		return
 	}
+	if req.Password != req.ConfirmPassword {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password and confirm password must match"})
+		return
+	}
 
-	user, err := h.authSvc.Register(c.Request.Context(), req.Email, req.Password)
+	user, err := h.authSvc.Register(c.Request.Context(), req.Name, req.Email, req.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrEmailTaken):
@@ -99,7 +112,79 @@ func (h *AuthHandler) LoginHandler(c *gin.Context) {
 		true,  // httpOnly
 	)
 
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{"access_token": pair.AccessToken}})
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"access_token": pair.AccessToken, "role": "user"}})
+}
+
+// AdminLoginHandler handles POST /api/v1/auth/admin-login.
+func (h *AuthHandler) AdminLoginHandler(c *gin.Context) {
+	var req adminLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields"})
+		return
+	}
+	if req.Email == "" || req.Password == "" || req.AdminPasscode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields"})
+		return
+	}
+	if req.AdminPasscode != config.GetAdminLoginPasscode() {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid admin passcode"})
+		return
+	}
+
+	pair, err := h.authSvc.Login(c.Request.Context(), req.Email, req.Password)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidCreds) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	c.SetCookie(
+		"refresh_token",
+		pair.RefreshToken,
+		int((7 * 24 * time.Hour).Seconds()),
+		"/",
+		"",
+		false,
+		true,
+	)
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"access_token": pair.AccessToken, "role": "admin"}})
+}
+
+// ServiceLoginHandler handles POST /api/v1/auth/service-login.
+func (h *AuthHandler) ServiceLoginHandler(c *gin.Context) {
+	var req loginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields"})
+		return
+	}
+	if req.Email == "" || req.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields"})
+		return
+	}
+
+	pair, err := h.authSvc.Login(c.Request.Context(), req.Email, req.Password)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidCreds) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	c.SetCookie(
+		"refresh_token",
+		pair.RefreshToken,
+		int((7 * 24 * time.Hour).Seconds()),
+		"/",
+		"",
+		false,
+		true,
+	)
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"access_token": pair.AccessToken, "role": "provider"}})
 }
 
 // RefreshHandler handles POST /api/v1/auth/refresh.

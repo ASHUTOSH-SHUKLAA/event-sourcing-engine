@@ -8,8 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"gin-quickstart/internal/appapi"
 	"gin-quickstart/internal/auth"
 	"gin-quickstart/internal/auth/service"
+	"gin-quickstart/internal/catalog"
 	"gin-quickstart/internal/config"
 	"gin-quickstart/internal/database"
 	"gin-quickstart/internal/user"
@@ -91,6 +93,12 @@ func main() {
 
 	//  User routes
 	user.RegisterRoutes(v1, userRepo, tokenSvc)
+
+	// Catalog routes (TheAudioDB proxy)
+	catalog.RegisterRoutes(v1)
+
+	// Domain + admin/provider placeholder routes
+	appapi.RegisterRoutes(v1, tokenSvc)
 
 	logger.Info("Server starting on :8080")
 

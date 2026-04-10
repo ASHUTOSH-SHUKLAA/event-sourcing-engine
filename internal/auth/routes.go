@@ -19,6 +19,8 @@ func RegisterRoutes(rg *gin.RouterGroup, repo repository.UserRepository) {
 	{
 		auth.POST("/register", h.RegisterHandler)
 		auth.POST("/login", h.LoginHandler)
+		auth.POST("/admin-login", h.AdminLoginHandler)
+		auth.POST("/service-login", h.ServiceLoginHandler)
 		auth.POST("/refresh", h.RefreshHandler)
 	}
 }

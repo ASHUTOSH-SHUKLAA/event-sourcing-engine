@@ -22,5 +22,6 @@ func RegisterRoutes(rg *gin.RouterGroup, repo repository.UserRepository, tokenSv
 	{
 		users.GET("/me", h.GetProfileHandler)
 		users.PUT("/me", h.UpdateProfileHandler)
+		users.PATCH("/me/password", h.ChangePasswordHandler)
 	}
 }

@@ -42,7 +42,7 @@ type TokenGenerator interface {
 
 // AuthService defines the business-logic contract for registration and login.
 type AuthService interface {
-	Register(ctx context.Context, email, password string) (*model.User, error)
+	Register(ctx context.Context, displayName, email, password string) (*model.User, error)
 	Login(ctx context.Context, email, password string) (*model.TokenPair, error)
 }
 
@@ -59,7 +59,7 @@ func NewAuthService(repo repository.UserRepository, tokenGen TokenGenerator) Aut
 
 // Register validates inputs, hashes the password, and persists a new user.
 // Requirements: 1.1, 1.2, 1.3, 1.4, 1.5
-func (s *authService) Register(ctx context.Context, email, password string) (*model.User, error) {
+func (s *authService) Register(ctx context.Context, displayName, email, password string) (*model.User, error) {
 	// Requirement 1.4 — validate email format
 	if _, err := mail.ParseAddress(email); err != nil {
 		return nil, ErrInvalidEmail
@@ -89,6 +89,7 @@ func (s *authService) Register(ctx context.Context, email, password string) (*mo
 		ID:           newUUID(),
 		Email:        email,
 		PasswordHash: string(hash),
+		DisplayName:  displayName,
 	}
 
 	// Requirement 1.1 — persist the new user
