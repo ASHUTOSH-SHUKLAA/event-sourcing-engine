@@ -10,7 +10,10 @@ import (
 	"gin-quickstart/internal/auth/service"
 )
 
-const UserIDKey = "userID"
+const (
+	UserIDKey   = "userID"
+	UserRoleKey = "userRole"
+)
 
 // AuthMiddleware validates the Authorization: Bearer <token> header and injects
 // the userID into the Gin context. Returns 401 for missing, malformed, or expired tokens.
@@ -40,6 +43,20 @@ func AuthMiddleware(tokenSvc service.TokenService) gin.HandlerFunc {
 		}
 
 		c.Set(UserIDKey, claims.UserID)
+		c.Set(UserRoleKey, claims.Role)
+		c.Next()
+	}
+}
+
+// AdminOnly blocks any request where the user role is not 'admin'.
+// Requirement: 6.3
+func AdminOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, _ := c.Get(UserRoleKey)
+		if role != "admin" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden: admin access required"})
+			return
+		}
 		c.Next()
 	}
 }
