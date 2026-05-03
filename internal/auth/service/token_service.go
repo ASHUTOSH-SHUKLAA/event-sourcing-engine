@@ -12,6 +12,7 @@ import (
 // Claims is the JWT payload used for both access and refresh tokens.
 type Claims struct {
 	UserID string `json:"user_id"`
+	Role   string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -25,8 +26,8 @@ var (
 // TokenService issues and validates JWT access and refresh tokens.
 // Requirements: 2.4, 2.5, 3.1, 3.2, 3.3
 type TokenService interface {
-	GenerateAccessToken(userID string) (string, error)
-	GenerateRefreshToken(userID string) (string, error)
+	GenerateAccessToken(userID string, role string) (string, error)
+	GenerateRefreshToken(userID string, role string) (string, error)
 	ValidateAccessToken(token string) (*Claims, error)
 	ValidateRefreshToken(token string) (*Claims, error)
 }
@@ -40,13 +41,14 @@ func NewTokenService() TokenService {
 
 // GenerateAccessToken signs a JWT with JWT_SECRET and a 15-minute expiry.
 // Requirement: 2.4
-func (t *tokenService) GenerateAccessToken(userID string) (string, error) {
+func (t *tokenService) GenerateAccessToken(userID string, role string) (string, error) {
 	secret := config.GetJWTSecret()
 	if secret == "" {
 		return "", ErrMissingSecret
 	}
 	claims := &Claims{
 		UserID: userID,
+		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -58,13 +60,14 @@ func (t *tokenService) GenerateAccessToken(userID string) (string, error) {
 
 // GenerateRefreshToken signs a JWT with JWT_REFRESH_SECRET and a 7-day expiry.
 // Requirement: 2.5
-func (t *tokenService) GenerateRefreshToken(userID string) (string, error) {
+func (t *tokenService) GenerateRefreshToken(userID string, role string) (string, error) {
 	secret := config.GetJWTRefreshSecret()
 	if secret == "" {
 		return "", ErrMissingSecret
 	}
 	claims := &Claims{
 		UserID: userID,
+		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

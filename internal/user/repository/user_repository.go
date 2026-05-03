@@ -17,6 +17,7 @@ type UserRepository interface {
 	FindByEmail(ctx context.Context, email string) (*model.User, error)
 	FindByID(ctx context.Context, id string) (*model.User, error)
 	UpdateDisplayName(ctx context.Context, id string, displayName string) error
+	UpdatePasswordHash(ctx context.Context, id string, passwordHash string) error
 }
 
 // pgxUserRepository is the PostgreSQL implementation backed by a pgxpool.
@@ -116,6 +117,23 @@ func (r *pgxUserRepository) UpdateDisplayName(ctx context.Context, id string, di
 	}
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("repository.UpdateDisplayName: user %s not found", id)
+	}
+	return nil
+}
+
+// UpdatePasswordHash stores a new password hash for the given user ID.
+func (r *pgxUserRepository) UpdatePasswordHash(ctx context.Context, id string, passwordHash string) error {
+	query := `
+		UPDATE users
+		SET password_hash = $1, updated_at = NOW()
+		WHERE id = $2`
+
+	tag, err := r.pool.Exec(ctx, query, passwordHash, id)
+	if err != nil {
+		return fmt.Errorf("repository.UpdatePasswordHash: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("repository.UpdatePasswordHash: user %s not found", id)
 	}
 	return nil
 }

@@ -8,9 +8,32 @@
 # Test binary
 *.test
 
+# Go build outputs
+bin/
+*.out
+
 # Environments
 .env
 .env.*
+.air.toml
 
 # Dependency directories
 vendor/
+
+# Local Go test cache
+.gocache/
+tmp/
+
+# Logs
+*.log
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml

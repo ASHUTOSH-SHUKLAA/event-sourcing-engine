@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"gin-quickstart/internal/auth/service"
+	"gin-quickstart/internal/config"
 )
 
 // AuthHandler holds the dependencies for auth HTTP handlers.
@@ -23,8 +24,10 @@ func NewAuthHandler(authSvc service.AuthService, tokenSvc service.TokenService) 
 
 // registerRequest is the expected JSON body for POST /api/v1/auth/register.
 type registerRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Name            string `json:"name"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirm_password"`
 }
 
 // loginRequest is the expected JSON body for POST /api/v1/auth/login.
@@ -33,20 +36,30 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+type adminLoginRequest struct {
+	Email         string `json:"email"`
+	Password      string `json:"password"`
+	AdminPasscode string `json:"admin_passcode"`
+}
+
 // RegisterHandler handles POST /api/v1/auth/register.
 // Requirements: 1.1, 1.2, 1.3, 1.4, 6.1, 6.3
 func (h *AuthHandler) RegisterHandler(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON format"})
 		return
 	}
 	if req.Email == "" || req.Password == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email and password are required"})
+		return
+	}
+	if req.Password != req.ConfirmPassword {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password and confirm password must match"})
 		return
 	}
 
-	user, err := h.authSvc.Register(c.Request.Context(), req.Email, req.Password)
+	user, err := h.authSvc.Register(c.Request.Context(), req.Name, req.Email, req.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrEmailTaken):
@@ -77,7 +90,7 @@ func (h *AuthHandler) LoginHandler(c *gin.Context) {
 		return
 	}
 
-	pair, err := h.authSvc.Login(c.Request.Context(), req.Email, req.Password)
+	pair, err := h.authSvc.Login(c.Request.Context(), req.Email, req.Password, "user")
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidCreds) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
@@ -99,29 +112,86 @@ func (h *AuthHandler) LoginHandler(c *gin.Context) {
 		true,  // httpOnly
 	)
 
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{"access_token": pair.AccessToken}})
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"access_token": pair.AccessToken, "role": "user"}})
 }
+
+// AdminLoginHandler handles POST /api/v1/auth/admin-login.
+func (h *AuthHandler) AdminLoginHandler(c *gin.Context) {
+	var req adminLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields"})
+		return
+	}
+	if req.Email == "" || req.Password == "" || req.AdminPasscode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields"})
+		return
+	}
+	if req.AdminPasscode != config.GetAdminLoginPasscode() {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid admin passcode"})
+		return
+	}
+
+	pair, err := h.authSvc.Login(c.Request.Context(), req.Email, req.Password, "admin")
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidCreds) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	c.SetCookie(
+		"refresh_token",
+		pair.RefreshToken,
+		int((7 * 24 * time.Hour).Seconds()),
+		"/",
+		"",
+		false,
+		true,
+	)
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"access_token": pair.AccessToken, "role": "admin"}})
+}
+
 
 // RefreshHandler handles POST /api/v1/auth/refresh.
 // Requirements: 3.1, 3.2, 6.1
 func (h *AuthHandler) RefreshHandler(c *gin.Context) {
 	refreshToken, err := c.Cookie("refresh_token")
 	if err != nil || refreshToken == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+		// Return 204 No Content instead of 401 to avoid 'error' logs in browser console
+		// for legitimate guest users on initial load.
+		c.Status(http.StatusNoContent)
 		return
 	}
 
 	claims, err := h.tokenSvc.ValidateRefreshToken(refreshToken)
 	if err != nil {
+		// Clear the invalid cookie so we don't loop
+		c.SetCookie("refresh_token", "", -1, "/", "", false, true)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
 		return
 	}
 
-	newAccessToken, err := h.tokenSvc.GenerateAccessToken(claims.UserID)
+	newAccessToken, err := h.tokenSvc.GenerateAccessToken(claims.UserID, claims.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{"access_token": newAccessToken}})
+}
+
+// LogoutHandler handles POST /api/v1/auth/logout.
+func (h *AuthHandler) LogoutHandler(c *gin.Context) {
+	c.SetCookie(
+		"refresh_token",
+		"",
+		-1,
+		"/",
+		"",
+		false,
+		true,
+	)
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"message": "logged out"}})
 }

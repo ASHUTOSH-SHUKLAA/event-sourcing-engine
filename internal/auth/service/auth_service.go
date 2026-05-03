@@ -36,14 +36,14 @@ var (
 // TokenGenerator is a dependency interface so the auth service can issue tokens
 // without being coupled to a concrete JWT implementation (wired in task 4).
 type TokenGenerator interface {
-	GenerateAccessToken(userID string) (string, error)
-	GenerateRefreshToken(userID string) (string, error)
+	GenerateAccessToken(userID string, role string) (string, error)
+	GenerateRefreshToken(userID string, role string) (string, error)
 }
 
 // AuthService defines the business-logic contract for registration and login.
 type AuthService interface {
-	Register(ctx context.Context, email, password string) (*model.User, error)
-	Login(ctx context.Context, email, password string) (*model.TokenPair, error)
+	Register(ctx context.Context, displayName, email, password string) (*model.User, error)
+	Login(ctx context.Context, email, password string, role string) (*model.TokenPair, error)
 }
 
 // authService is the concrete implementation of AuthService.
@@ -59,7 +59,7 @@ func NewAuthService(repo repository.UserRepository, tokenGen TokenGenerator) Aut
 
 // Register validates inputs, hashes the password, and persists a new user.
 // Requirements: 1.1, 1.2, 1.3, 1.4, 1.5
-func (s *authService) Register(ctx context.Context, email, password string) (*model.User, error) {
+func (s *authService) Register(ctx context.Context, displayName, email, password string) (*model.User, error) {
 	// Requirement 1.4 — validate email format
 	if _, err := mail.ParseAddress(email); err != nil {
 		return nil, ErrInvalidEmail
@@ -89,6 +89,7 @@ func (s *authService) Register(ctx context.Context, email, password string) (*mo
 		ID:           newUUID(),
 		Email:        email,
 		PasswordHash: string(hash),
+		DisplayName:  displayName,
 	}
 
 	// Requirement 1.1 — persist the new user
@@ -101,7 +102,7 @@ func (s *authService) Register(ctx context.Context, email, password string) (*mo
 
 // Login verifies credentials and returns a TokenPair on success.
 // Requirements: 2.1, 2.2, 2.3
-func (s *authService) Login(ctx context.Context, email, password string) (*model.TokenPair, error) {
+func (s *authService) Login(ctx context.Context, email, password string, role string) (*model.TokenPair, error) {
 	// Requirement 2.3 — unknown email returns 401 (same message as wrong password)
 	user, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
@@ -117,12 +118,12 @@ func (s *authService) Login(ctx context.Context, email, password string) (*model
 	}
 
 	// Requirement 2.1 — issue token pair
-	accessToken, err := s.tokenGen.GenerateAccessToken(user.ID)
+	accessToken, err := s.tokenGen.GenerateAccessToken(user.ID, role)
 	if err != nil {
 		return nil, fmt.Errorf("auth.Login: access token generation failed: %w", err)
 	}
 
-	refreshToken, err := s.tokenGen.GenerateRefreshToken(user.ID)
+	refreshToken, err := s.tokenGen.GenerateRefreshToken(user.ID, role)
 	if err != nil {
 		return nil, fmt.Errorf("auth.Login: refresh token generation failed: %w", err)
 	}
