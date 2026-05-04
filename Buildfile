@@ -1,1 +1,1 @@
-build: go build -o application .
+build: echo "Pre-built binary in bin/application"
