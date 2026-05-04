@@ -1,1 +1,1 @@
-build: echo "Skipping build"
+build: go build -o application .

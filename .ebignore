@@ -1,7 +1,11 @@
 .git
 .gitignore
-README.md
 *.exe
 .gocache
 tmp
 eb_logs.txt
+.env
+test.zip
+test_extract/
+.air.toml
+application
