@@ -1,3 +1,7 @@
 .git
 .gitignore
 README.md
+*.exe
+.gocache
+tmp
+eb_logs.txt
