@@ -8,4 +8,4 @@ eb_logs.txt
 test.zip
 test_extract/
 .air.toml
-application
+bin/
